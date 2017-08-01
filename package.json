@@ -1,0 +1,40 @@
+{
+  "name": "wafl",
+  "version": "0.0.10",
+  "description": "Wallaby-Fuse-Luis Test Helpers",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "types": "./index.d.ts",
+  "keywords": [
+    "Testing",
+    "WallabyJs",
+    "FuseBox",
+    "Javascript"
+  ],
+  "author": "Tomi Trescak",
+  "license": "MIT",
+  "dependencies": {
+    "@types/chai": "4.x.x",
+    "@types/chai-enzyme": "0.x.x",
+    "@types/sinon": "2.x.x",
+    "@types/sinon-chai": "2.x.x",
+    "chai-enzyme": "0.x.x",
+    "enzyme": "2.x.x",
+    "enzyme-to-json": "1.x.x",
+    "fuse-box": "2.x.x",
+    "js-beautify": "1.x.x",
+    "jsdom": "11.x.x",
+    "jsdom-global": "3.x.x",
+    "jsx-controls-loader": "0.x.x",
+    "luis": "1.x.x",
+    "prop-types": "15.x.x",
+    "proxyrequire": "1.x.x",
+    "react-addons-test-utils": "15.x.x",
+    "remotedev": "0.x.x",
+    "sinon": "2.x.x",
+    "sinon-chai": "2.x.x",
+    "tslint-config-prettier": "1.x.x"
+  }
+}
