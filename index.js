@@ -21,7 +21,7 @@ function setupSnapshots(config) {
   // console.log(config.snapshotDir);
 }
 
-function setupBddBridge() {
+function setupBddBridge(startImmediately = true) {
   const glob = global;
 
   let exp;
@@ -38,6 +38,10 @@ function setupBddBridge() {
     try {
       impl();
     } finally {
+      const startTests = require('luis').startTests;
+      if (startImmediately && describeStack.length == 1) {
+        startTests([{[name]: exp}]);
+      }
       describeStack.pop();
     }
   };
@@ -128,7 +132,6 @@ function setupJsDom() {
 
 function setupWallaby(config, wallaby) {
   var mocha = wallaby.testFramework;
-  config = config || require('fuse-test-runner').TestConfig;
 
   mocha.suite.on('pre-require', function(context) {
     const origIt = context.it;
@@ -298,12 +301,13 @@ function __runTests(test, className) {
   return content;
 }
 
-function setupLuis() {
+function setupLuis(startImmediately = true) {
   const testConfig = require('chai-match-snapshot').config;
 
   setupSerialiser(testConfig);
   setupEnzyme();
   setupChai();
+  setupBddBridge(startImmediately)
 }
 
 module.exports = {
