@@ -27,7 +27,7 @@ module.exports = function(wallaby) {
     },
     testFramework: 'mocha',
     setup: function(wallaby) {     
-      require('wafl').setup(null, wallaby);
+      require('wafl').setup({ wallaby });
     }
   };
 };

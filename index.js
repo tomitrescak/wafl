@@ -165,6 +165,7 @@ function setupWallaby(config, wallaby) {
         }
       });
     };
+    context.xit = function() {}
   });
 }
 
