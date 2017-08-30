@@ -1,18 +1,23 @@
 const html = require('js-beautify').html;
 const gql = require('graphql-tag');
 
-function setup({config, wallaby } = {}) {
+function setup({
+  config,
+  wallaby
+} = {}) {
   config = config || require('chai-match-snapshot/config').config;
 
   if (wallaby) {
     setupWallaby(config, wallaby);
   }
-  setupGlobals(config);
+  
   setupSnapshots(config);
   setupSerialiser(config);
   setupJsDom();
   setupEnzyme();
   setupChai();
+  setupGlobals(config);
+  setupTestExtensions();
 }
 
 function setupSnapshots(config) {
@@ -27,7 +32,7 @@ function setupBddBridge(startImmediately = true) {
   let exp;
   let describeStack = [];
 
-  glob.describe = function(name, impl) {
+  glob.describe = function (name, impl) {
     describeStack.push(name);
     if (describeStack.length == 1) {
       exp = new Function('return function ' + name + '(){}')();
@@ -40,22 +45,31 @@ function setupBddBridge(startImmediately = true) {
     } finally {
       const startTests = require('luis').startTests;
       if (startImmediately && describeStack.length == 1) {
-        startTests([{[name]: exp}]);
+        startTests([{
+          [name]: exp
+        }]);
       }
       describeStack.pop();
+
+      // top level describe unmoxks everything
+      if (describeStack.length == 0) {
+        require('proxyrequire').unmockAll();
+      }
     }
+
+    
   };
 
-  glob.xit = function(name, impl) {};
+  glob.xit = function (name, impl) {};
 
-  glob.xdescribe = function(name, impl) {};
+  glob.xdescribe = function (name, impl) {};
 
-  glob.it = function(name, impl) {
+  glob.it = function (name, impl) {
     const fullName = describeStack.length > 1 ? `${describeStack.slice(1).join(' > ')} > ${name}` : name;
     exp.prototype[fullName] = impl;
   };
 
-  glob.config = function(obj) {
+  glob.config = function (obj) {
     const con = obj;
     for (let name of Object.getOwnPropertyNames(con)) {
       if (name != 'constructor') {
@@ -64,27 +78,27 @@ function setupBddBridge(startImmediately = true) {
     }
   };
 
-  glob.before = function(impl) {
+  glob.before = function (impl) {
     exp.prototype.before = impl;
   };
 
-  glob.beforeAll = function(impl) {
+  glob.beforeAll = function (impl) {
     exp.prototype.beforeAll = impl;
   };
 
-  glob.beforeEach = function(impl) {
+  glob.beforeEach = function (impl) {
     exp.prototype.beforeEach = impl;
   };
 
-  glob.after = function(impl) {
+  glob.after = function (impl) {
     exp.prototype.after = impl;
   };
 
-  glob.afterAll = function(impl) {
+  glob.afterAll = function (impl) {
     exp.prototype.afterAll = impl;
   };
 
-  glob.afterEach = function(impl) {
+  glob.afterEach = function (impl) {
     exp.prototype.afterEach = impl;
   };
 }
@@ -133,11 +147,11 @@ function setupJsDom() {
 function setupWallaby(config, wallaby) {
   var mocha = wallaby.testFramework;
 
-  mocha.suite.on('pre-require', function(context) {
+  mocha.suite.on('pre-require', function (context) {
     const origIt = context.it;
-    context.config = function() {};
-    context.it = function(name, impl) {
-      return origIt.call(this, name, function() {
+    context.config = function () {};
+    context.it = function (name, impl) {
+      return origIt.call(this, name, function () {
         try {
           let topParent = '';
           let name = this.test.title;
@@ -165,7 +179,7 @@ function setupWallaby(config, wallaby) {
         }
       });
     };
-    context.xit = function() {}
+    context.xit = function () {}
   });
 }
 
@@ -174,9 +188,14 @@ function setupSerialiser(config) {
   let originalSerializer = config.serializer;
   config.serializer = obj => {
     if (obj.html) {
-      return html(obj.html().replace(/ ;/g, ';'), {
-        indent_size: 2
-      });
+      let objectHtml = obj.html();
+      if (objectHtml) {
+        return html(objectHtml.replace(/ ;/g, ';'), {
+          indent_size: 2
+        });
+      } else {
+        return "<div>ERROR: Component does not generate any HTML code!</div>";
+      }
     } else {
       return originalSerializer(obj);
     }
@@ -187,10 +206,10 @@ function setupEnzyme() {
   const ShallowWrapper = require('enzyme/build/ShallowWrapper').default;
   const ReactWrapper = require('enzyme/build/ReactWrapper').default;
 
-  ShallowWrapper.prototype.change = function(value) {
+  ShallowWrapper.prototype.change = function (value) {
     change(this, value);
   };
-  ReactWrapper.prototype.change = function(value) {
+  ReactWrapper.prototype.change = function (value) {
     change(this, value);
   };
 
@@ -202,10 +221,10 @@ function setupEnzyme() {
     });
     wrapper.node.value = value;
   }
-  ShallowWrapper.prototype.select = function(number) {
+  ShallowWrapper.prototype.select = function (number) {
     select(this, number);
   };
-  ReactWrapper.prototype.select = function(number) {
+  ReactWrapper.prototype.select = function (number) {
     select(this, number);
   };
 
@@ -232,6 +251,7 @@ function setupChai() {
   const chai = require('chai');
   const sinonChai = require('sinon-chai');
   const chaiEnzyme = require('chai-enzyme');
+  const chaiSubset = require('chai-subset');
   const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
   // const should = global.FuseBox ? FuseBox.import('fuse-test-runner').should : require('fuse-test-runner').should;
 
@@ -239,20 +259,69 @@ function setupChai() {
   chai.use(sinonChai);
   chai.use(chaiEnzyme());
   chai.use(chaiMatchSnapshot);
+  chai.use(chaiSubset);
 }
 
 function setupGlobals() {
+  global.localStorage = {
+    setItem(key, value) {
+      global.localStorage[key] = value;
+    },
+    getItem(key) {
+      return global.localStorage[key];
+    },
+    removeItem(key) {
+      delete global.localStorage[key];
+    }
+  };
+
   global.navigator = {
     userAgent: 'node.js'
   };
 
   global.action = () => {};
+  global.monitor = () => {};
+  global.cancelAnimationFrame = () => {};
 
   // setup globals
 
   const i18n = require('es2015-i18n-tag').default;
   global.i18n = i18n;
   global.gql = gql;
+}
+
+function setupTestExtensions() {
+  const { mount } = require('enzyme');
+  let root = document.createElement('div');
+  global.itMountsAnd = function(name, component, test) {
+    it(name, function() {
+      let init = typeof component === 'function' ? component() : component;
+      let comp = init.component ? init.component : init;
+      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+      try {
+        test((init.component || init.component) ? Object.assign(init, { wrapper }) : wrapper);
+      } catch (ex) {
+        throw ex;
+      } finally {
+        try { wrapper.detach(); } catch (ex) {}
+      }
+    });
+  }
+
+  global.itMountsAsyncAnd = function(name, component, test) {
+    it(name, async function() {
+      let init = typeof component === 'function' ? component() : component;
+      let comp = init.component ? init.component : init;
+      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+      try {
+        await test((init.component || init.component) ? Object.assign(init, { wrapper }) : wrapper);
+      } catch (ex) {
+        throw ex;
+      } finally {
+        try { wrapper.detach(); } catch (ex) {}
+      }
+    });
+  }
 }
 
 function transform(content, name) {
@@ -305,10 +374,14 @@ function __runTests(test, className) {
 function setupLuis(startImmediately = true) {
   const testConfig = require('chai-match-snapshot').config;
 
+  global.gql = gql;
+  global.action = require('luis').action;
+
   setupSerialiser(testConfig);
   setupEnzyme();
   setupChai();
-  setupBddBridge(startImmediately)
+  setupBddBridge(startImmediately);
+  setupTestExtensions();
 }
 
 module.exports = {
