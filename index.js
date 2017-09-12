@@ -1,5 +1,6 @@
 const html = require('js-beautify').html;
 const gql = require('graphql-tag');
+const parseStoryName = require('chai-match-snapshot/config').parseStoryName;
 
 function setup({
   config,
@@ -50,15 +51,39 @@ function setupBddBridge(startImmediately = true) {
         }]);
       }
       describeStack.pop();
-
-      // top level describe unmoxks everything
-      if (describeStack.length == 0) {
-        require('proxyrequire').unmockAll();
-      }
     }
-
-    
   };
+
+  glob.storyOf = function(longName, props, impl) {
+    const names = parseStoryName(longName);
+    const name = names.fileName;
+    
+    props.folder = props.folder || names.folder;
+    props.story = names.story;
+    
+
+    describeStack.push(name);
+    exp = new Function('return function ' + name + '(){}')();
+    exp.prototype.storyConfig = props; 
+
+    // copy props on prototype
+    props.story = props.story || longName;
+    
+    // exp.name = name;
+    glob.fuseExport = exp;
+  
+    try {
+      impl(props);
+    } finally {
+      const startTests = require('luis').startTests;
+      if (startImmediately && describeStack.length == 1) {
+        startTests([{
+          [name]: exp
+        }]);
+      }
+      describeStack.pop();
+    }
+  }
 
   glob.xit = function (name, impl) {};
 
@@ -73,8 +98,13 @@ function setupBddBridge(startImmediately = true) {
     const con = obj;
     for (let name of Object.getOwnPropertyNames(con)) {
       if (name != 'constructor') {
-        exp.prototype[name] = con[name];
-      }
+      // exp.prototype.story = con.story;
+      // exp.prototype.info = con.info;
+      // exp.prototype.folder = con.folder;
+      // exp.prototype.css = con.css;
+      // exp.prototype.component = con.component;
+      exp.prototype[name] = con[name];
+     }
     }
   };
 
@@ -150,6 +180,10 @@ function setupWallaby(config, wallaby) {
   mocha.suite.on('pre-require', function (context) {
     const origIt = context.it;
     context.config = function () {};
+    context.storyOf = function (title, props, fn) {
+      const names = parseStoryName(title);
+      context.describe(names.fileName, () => fn(props));
+    };  
     context.it = function (name, impl) {
       return origIt.call(this, name, function () {
         try {
@@ -252,6 +286,7 @@ function setupChai() {
   const sinonChai = require('sinon-chai');
   const chaiEnzyme = require('chai-enzyme');
   const chaiSubset = require('chai-subset');
+  const chaiAsPromised = require("chai-as-promised");
   const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
   // const should = global.FuseBox ? FuseBox.import('fuse-test-runner').should : require('fuse-test-runner').should;
 
@@ -260,7 +295,9 @@ function setupChai() {
   chai.use(chaiEnzyme());
   chai.use(chaiMatchSnapshot);
   chai.use(chaiSubset);
+  chai.use(chaiAsPromised);
 }
+
 
 function setupGlobals() {
   global.localStorage = {
@@ -285,8 +322,12 @@ function setupGlobals() {
 
   // setup globals
 
-  const i18n = require('es2015-i18n-tag').default;
-  global.i18n = i18n;
+  try {
+    const i18n = require('es2015-i18n-tag');
+    if (i18n) {
+      global.i18n = i18n.default;
+    }
+  } catch (ex) {}
   global.gql = gql;
 }
 
