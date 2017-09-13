@@ -1,6 +1,6 @@
 {
   "name": "wafl",
-  "version": "0.2.13",
+  "version": "0.2.18",
   "description": "Wallaby-Fuse-Luis Test Helpers",
   "main": "index.js",
   "scripts": {
@@ -25,7 +25,7 @@
     "chai": "^4.1.1",
     "chai-as-promised": "^7.1.1",
     "chai-enzyme": "^0.8.0",
-    "chai-match-snapshot": "^1.0.15",
+    "chai-match-snapshot": "^1.0.16",
     "chai-subset": "^1.5.0",
     "enzyme": "^2.9.1",
     "enzyme-to-json": "^1.5.1",

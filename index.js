@@ -2,16 +2,13 @@ const html = require('js-beautify').html;
 const gql = require('graphql-tag');
 const parseStoryName = require('chai-match-snapshot/config').parseStoryName;
 
-function setup({
-  config,
-  wallaby
-} = {}) {
+function setup({ config, wallaby } = {}) {
   config = config || require('chai-match-snapshot/config').config;
 
   if (wallaby) {
     setupWallaby(config, wallaby);
   }
-  
+
   setupSnapshots(config);
   setupSerialiser(config);
   setupJsDom();
@@ -33,7 +30,7 @@ function setupBddBridge(startImmediately = true) {
   let exp;
   let describeStack = [];
 
-  glob.describe = function (name, impl) {
+  glob.describe = function(name, impl) {
     describeStack.push(name);
     if (describeStack.length == 1) {
       exp = new Function('return function ' + name + '(){}')();
@@ -46,9 +43,11 @@ function setupBddBridge(startImmediately = true) {
     } finally {
       const startTests = require('luis').startTests;
       if (startImmediately && describeStack.length == 1) {
-        startTests([{
-          [name]: exp
-        }]);
+        startTests([
+          {
+            [name]: exp
+          }
+        ]);
       }
       describeStack.pop();
     }
@@ -57,82 +56,82 @@ function setupBddBridge(startImmediately = true) {
   glob.storyOf = function(longName, props, impl) {
     const names = parseStoryName(longName);
     const name = names.fileName;
-    
+
     props.folder = props.folder || names.folder;
     props.story = names.story;
-    
 
     describeStack.push(name);
     exp = new Function('return function ' + name + '(){}')();
-    exp.prototype.storyConfig = props; 
+    exp.prototype.storyConfig = props;
 
     // copy props on prototype
     props.story = props.story || longName;
-    
+
     // exp.name = name;
     glob.fuseExport = exp;
-  
+
     try {
       impl(props);
     } finally {
       const startTests = require('luis').startTests;
       if (startImmediately && describeStack.length == 1) {
-        startTests([{
-          [name]: exp
-        }]);
+        startTests([
+          {
+            [name]: exp
+          }
+        ]);
       }
       describeStack.pop();
     }
-  }
+  };
 
-  glob.xit = function (name, impl) {};
+  glob.xit = function(name, impl) {};
 
-  glob.xdescribe = function (name, impl) {};
+  glob.xdescribe = function(name, impl) {};
 
-  glob.it = function (name, impl) {
+  glob.it = function(name, impl) {
     const fullName = describeStack.length > 1 ? `${describeStack.slice(1).join(' > ')} > ${name}` : name;
     exp.prototype[fullName] = impl;
   };
 
-  glob.config = function (obj) {
+  glob.config = function(obj) {
     const con = obj;
     for (let name of Object.getOwnPropertyNames(con)) {
       if (name != 'constructor') {
-      // exp.prototype.story = con.story;
-      // exp.prototype.info = con.info;
-      // exp.prototype.folder = con.folder;
-      // exp.prototype.css = con.css;
-      // exp.prototype.component = con.component;
-      exp.prototype[name] = con[name];
-     }
+        // exp.prototype.story = con.story;
+        // exp.prototype.info = con.info;
+        // exp.prototype.folder = con.folder;
+        // exp.prototype.css = con.css;
+        // exp.prototype.component = con.component;
+        exp.prototype[name] = con[name];
+      }
     }
   };
 
-  glob.before = function (impl) {
+  glob.before = function(impl) {
     exp.prototype.before = impl;
   };
 
-  glob.beforeAll = function (impl) {
+  glob.beforeAll = function(impl) {
     exp.prototype.beforeAll = impl;
   };
 
-  glob.beforeEach = function (impl) {
+  glob.beforeEach = function(impl) {
     exp.prototype.beforeEach = impl;
   };
 
-  glob.after = function (impl) {
+  glob.after = function(impl) {
     exp.prototype.after = impl;
   };
 
-  glob.afterAll = function (impl) {
+  glob.afterAll = function(impl) {
     exp.prototype.afterAll = impl;
   };
 
-  glob.afterEach = function (impl) {
+  glob.afterEach = function(impl) {
     exp.prototype.afterEach = impl;
   };
 }
-
 
 function setupJsDom() {
   require('jsdom-global')();
@@ -177,15 +176,16 @@ function setupJsDom() {
 function setupWallaby(config, wallaby) {
   var mocha = wallaby.testFramework;
 
-  mocha.suite.on('pre-require', function (context) {
+  mocha.suite.on('pre-require', function(context) {
     const origIt = context.it;
-    context.config = function () {};
-    context.storyOf = function (title, props, fn) {
+    context.config = function() {};
+    context.storyOf = function(title, props, fn) {
       const names = parseStoryName(title);
-      context.describe(names.fileName, () => fn(props));
-    };  
-    context.it = function (name, impl) {
-      return origIt.call(this, name, function () {
+      const tags = ' @story' + (props.tags ? ' ' + props.tags : '');
+      context.describe(names.fileName + tags, () => fn(props));
+    };
+    context.it = function(name, impl) {
+      return origIt.call(this, name, function() {
         try {
           let topParent = '';
           let name = this.test.title;
@@ -200,6 +200,9 @@ function setupWallaby(config, wallaby) {
             parent = parent.parent;
           }
 
+          // remove tags
+          topParent.replace(/ @[\w]+/, '');
+
           config.currentTask = {
             className: topParent,
             title: this.test.title
@@ -213,10 +216,9 @@ function setupWallaby(config, wallaby) {
         }
       });
     };
-    context.xit = function () {}
+    context.xit = function() {};
   });
 }
-
 
 function setupSerialiser(config) {
   let originalSerializer = config.serializer;
@@ -228,7 +230,7 @@ function setupSerialiser(config) {
           indent_size: 2
         });
       } else {
-        return "<div>ERROR: Component does not generate any HTML code!</div>";
+        return '<div>ERROR: Component does not generate any HTML code!</div>';
       }
     } else {
       return originalSerializer(obj);
@@ -240,10 +242,10 @@ function setupEnzyme() {
   const ShallowWrapper = require('enzyme/build/ShallowWrapper').default;
   const ReactWrapper = require('enzyme/build/ReactWrapper').default;
 
-  ShallowWrapper.prototype.change = function (value) {
+  ShallowWrapper.prototype.change = function(value) {
     change(this, value);
   };
-  ReactWrapper.prototype.change = function (value) {
+  ReactWrapper.prototype.change = function(value) {
     change(this, value);
   };
 
@@ -255,10 +257,10 @@ function setupEnzyme() {
     });
     wrapper.node.value = value;
   }
-  ShallowWrapper.prototype.select = function (number) {
+  ShallowWrapper.prototype.select = function(number) {
     select(this, number);
   };
-  ReactWrapper.prototype.select = function (number) {
+  ReactWrapper.prototype.select = function(number) {
     select(this, number);
   };
 
@@ -273,11 +275,15 @@ function setupEnzyme() {
       }
       items.at(value).simulate('click');
     } else {
-      wrapper.parent().find('Dropdown').find(Dropdown.Item).at(value).simulate('click');
+      wrapper
+        .parent()
+        .find('Dropdown')
+        .find(Dropdown.Item)
+        .at(value)
+        .simulate('click');
     }
   }
 }
-
 
 function setupChai() {
   // setup chai
@@ -286,7 +292,7 @@ function setupChai() {
   const sinonChai = require('sinon-chai');
   const chaiEnzyme = require('chai-enzyme');
   const chaiSubset = require('chai-subset');
-  const chaiAsPromised = require("chai-as-promised");
+  const chaiAsPromised = require('chai-as-promised');
   const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
   // const should = global.FuseBox ? FuseBox.import('fuse-test-runner').should : require('fuse-test-runner').should;
 
@@ -297,7 +303,6 @@ function setupChai() {
   chai.use(chaiSubset);
   chai.use(chaiAsPromised);
 }
-
 
 function setupGlobals() {
   global.localStorage = {
@@ -339,15 +344,34 @@ function setupTestExtensions() {
       let init = typeof component === 'function' ? component() : component;
       let comp = init.component ? init.component : init;
       const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+      wrapper.dispose = () => {
+        try {
+          wrapper.detach();
+        } catch (ex) {}
+      };
+
       try {
-        test((init.component || init.component) ? Object.assign(init, { wrapper }) : wrapper);
+        const res = test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
+        if (res instanceof Promise) {
+          return new Promise((resolve, reject) => {
+            res
+              .then(() => {
+                wrapper.dispose();
+                resolve();
+              })
+              .catch(error => {
+                wrapper.dispose();
+                reject(error);
+              });
+          });
+        }
+        return res;
       } catch (ex) {
+        wrapper.dispose();
         throw ex;
-      } finally {
-        try { wrapper.detach(); } catch (ex) {}
       }
     });
-  }
+  };
 
   global.itMountsAsyncAnd = function(name, component, test) {
     it(name, async function() {
@@ -355,14 +379,39 @@ function setupTestExtensions() {
       let comp = init.component ? init.component : init;
       const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
       try {
-        await test((init.component || init.component) ? Object.assign(init, { wrapper }) : wrapper);
+        await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
       } catch (ex) {
         throw ex;
       } finally {
-        try { wrapper.detach(); } catch (ex) {}
+        try {
+          wrapper.detach();
+        } catch (ex) {}
       }
     });
-  }
+  };
+
+  global.itMountsContainerAnd = function(name, component, test) {
+    it(name, async function() {
+      let init = typeof component === 'function' ? component() : component;
+      let comp = init.component ? init.component : init;
+      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+
+      if (!init.client) {
+        throw new Error('You need to pass "client: ApolloClient" alongside of "component"');
+      }
+      await require('apollo-mobx/testing').waitForQueries(init.client);
+
+      try {
+        await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
+      } catch (ex) {
+        throw ex;
+      } finally {
+        try {
+          wrapper.detach();
+        } catch (ex) {}
+      }
+    });
+  };
 }
 
 function transform(content, name) {
