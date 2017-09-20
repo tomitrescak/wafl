@@ -1,9 +1,9 @@
 const html = require('js-beautify').html;
-const gql = require('graphql-tag');
 const parseStoryName = require('chai-match-snapshot/config').parseStoryName;
+const testConfig = require('chai-match-snapshot').config;
 
 function setup({ config, wallaby } = {}) {
-  config = config || require('chai-match-snapshot/config').config;
+  config = config || testConfig;
 
   if (wallaby) {
     setupWallaby(config, wallaby);
@@ -22,115 +22,6 @@ function setupSnapshots(config) {
   config.snapshotDir = config.snapshotDir || 'src/tests/snapshots';
   config.snapshotExtension = 'json';
   // console.log(config.snapshotDir);
-}
-
-function setupBddBridge(startImmediately = true) {
-  const glob = global;
-
-  let exp;
-  let describeStack = [];
-
-  glob.describe = function(name, impl) {
-    describeStack.push(name);
-    if (describeStack.length == 1) {
-      exp = new Function('return function ' + name + '(){}')();
-      // exp.name = name;
-      glob.fuseExport = exp;
-    }
-
-    try {
-      impl();
-    } finally {
-      const startTests = require('luis').startTests;
-      if (startImmediately && describeStack.length == 1) {
-        startTests([
-          {
-            [name]: exp
-          }
-        ]);
-      }
-      describeStack.pop();
-    }
-  };
-
-  glob.storyOf = function(longName, props, impl) {
-    const names = parseStoryName(longName);
-    const name = names.fileName;
-
-    props.folder = props.folder || names.folder;
-    props.story = names.story;
-
-    describeStack.push(name);
-    exp = new Function('return function ' + name + '(){}')();
-    exp.prototype.storyConfig = props;
-
-    // copy props on prototype
-    props.story = props.story || longName;
-
-    // exp.name = name;
-    glob.fuseExport = exp;
-
-    try {
-      impl(props);
-    } finally {
-      const startTests = require('luis').startTests;
-      if (startImmediately && describeStack.length == 1) {
-        startTests([
-          {
-            [name]: exp
-          }
-        ]);
-      }
-      describeStack.pop();
-    }
-  };
-
-  glob.xit = function(name, impl) {};
-
-  glob.xdescribe = function(name, impl) {};
-
-  glob.it = function(name, impl) {
-    const fullName = describeStack.length > 1 ? `${describeStack.slice(1).join(' > ')} > ${name}` : name;
-    exp.prototype[fullName] = impl;
-  };
-
-  glob.config = function(obj) {
-    const con = obj;
-    for (let name of Object.getOwnPropertyNames(con)) {
-      if (name != 'constructor') {
-        // exp.prototype.story = con.story;
-        // exp.prototype.info = con.info;
-        // exp.prototype.folder = con.folder;
-        // exp.prototype.css = con.css;
-        // exp.prototype.component = con.component;
-        exp.prototype[name] = con[name];
-      }
-    }
-  };
-
-  glob.before = function(impl) {
-    exp.prototype.before = impl;
-  };
-
-  glob.beforeAll = function(impl) {
-    exp.prototype.beforeAll = impl;
-  };
-
-  glob.beforeEach = function(impl) {
-    exp.prototype.beforeEach = impl;
-  };
-
-  glob.after = function(impl) {
-    exp.prototype.after = impl;
-  };
-
-  glob.afterAll = function(impl) {
-    exp.prototype.afterAll = impl;
-  };
-
-  glob.afterEach = function(impl) {
-    exp.prototype.afterEach = impl;
-  };
 }
 
 function setupJsDom() {
@@ -187,25 +78,25 @@ function setupWallaby(config, wallaby) {
     context.it = function(name, impl) {
       return origIt.call(this, name, function() {
         try {
-          let topParent = '';
           let name = this.test.title;
           let parent = this.test.parent;
-          let parentName = '';
+          let parents = [];
           while (parent != null) {
-            name = parent.title + ' ' + name;
-            parentName = parent.title + parentName;
             if (parent.title) {
-              topParent = parent.title;
+              parents.push(parent.title);
             }
             parent = parent.parent;
           }
 
           // remove tags
-          topParent.replace(/ @[\w]+/, '');
+          let topParent = parents.reverse().join('_');
+
+          topParent = topParent.replace(/ @[^_]+/g, '');
+          topParent = topParent.replace(/\s/g, '');
 
           config.currentTask = {
             className: topParent,
-            title: this.test.title
+            title: name
           };
           config.snapshotCalls = null;
           // console.log('!!!!!!!!!!!!!!!!');
@@ -236,6 +127,20 @@ function setupSerialiser(config) {
       return originalSerializer(obj);
     }
   };
+}
+
+function setupJsxControls() {
+  const fs = require('fs');
+  const origRfs = fs.readFileSync;
+  const jsxTransform = require('jsx-controls-loader').loader;
+  
+  fs.readFileSync = function(source, encoding) {
+    if (source.indexOf('node_modules') == -1 && source.match(/\.tsx$/)) {
+      const file = origRfs(source, encoding);
+      return jsxTransform(file);
+    }
+    return origRfs(source, encoding);
+  }
 }
 
 function setupEnzyme() {
@@ -333,12 +238,12 @@ function setupGlobals() {
       global.i18n = i18n.default;
     }
   } catch (ex) {}
-  global.gql = gql;
 }
 
 function setupTestExtensions() {
   const { mount } = require('enzyme');
   let root = document.createElement('div');
+  document.documentElement.appendChild(root);
   global.itMountsAnd = function(name, component, test) {
     it(name, function() {
       let init = typeof component === 'function' ? component() : component;
@@ -350,9 +255,11 @@ function setupTestExtensions() {
         } catch (ex) {}
       };
 
+      let isAsync = false;
       try {
         const res = test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
-        if (res instanceof Promise) {
+        isAsync = res instanceof Promise;
+        if (isAsync) {
           return new Promise((resolve, reject) => {
             res
               .then(() => {
@@ -367,8 +274,11 @@ function setupTestExtensions() {
         }
         return res;
       } catch (ex) {
-        wrapper.dispose();
         throw ex;
+      } finally {
+        if (!isAsync) {
+          wrapper.dispose();
+        }
       }
     });
   };
@@ -462,15 +372,9 @@ function __runTests(test, className) {
 }
 
 function setupLuis(startImmediately = true) {
-  const testConfig = require('chai-match-snapshot').config;
-
-  global.gql = gql;
-  global.action = require('luis').action;
-
   setupSerialiser(testConfig);
   setupEnzyme();
   setupChai();
-  setupBddBridge(startImmediately);
   setupTestExtensions();
 }
 
@@ -479,5 +383,5 @@ module.exports = {
   setupGlobals,
   setupLuis,
   transform,
-  setupBddBridge
+  setupJsxControls
 };

@@ -26,7 +26,7 @@ module.exports = function(wallaby) {
       runner: '/usr/local/bin/node'
     },
     testFramework: 'mocha',
-    setup: function(wallaby) {     
+    setup: function(wallaby) {   
       require('wafl').setup({ wallaby });
     }
   };
