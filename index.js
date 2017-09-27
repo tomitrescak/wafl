@@ -69,7 +69,27 @@ function setupWallaby(config, wallaby) {
 
   mocha.suite.on('pre-require', function(context) {
     const origIt = context.it;
+    const origDescribe = context.describe;
+
+    context.describe = function(name, impl) {
+      origDescribe(name, () => {
+        before(() => {
+          config.writeSnapshots = null;
+          config.snapshotCalls = null;
+        });
+
+        after(() => {
+          if (config.writeSnapshots) {
+            config.writeSnapshots();
+          }
+        });
+
+        impl();
+      })
+    };
+
     context.config = function() {};
+
     context.storyOf = function(title, props, fn) {
       const names = parseStoryName(title);
       const tags = ' @story' + (props.tags ? ' ' + props.tags : '');
@@ -98,7 +118,7 @@ function setupWallaby(config, wallaby) {
             className: topParent,
             title: name
           };
-          config.snapshotCalls = null;
+          // config.snapshotCalls = null;
           // console.log('!!!!!!!!!!!!!!!!');
           // console.log(TestConfig.currentTask);
           return impl();
@@ -133,14 +153,14 @@ function setupJsxControls() {
   const fs = require('fs');
   const origRfs = fs.readFileSync;
   const jsxTransform = require('jsx-controls-loader').loader;
-  
+
   fs.readFileSync = function(source, encoding) {
     if (source.indexOf('node_modules') == -1 && source.match(/\.tsx$/)) {
       const file = origRfs(source, encoding);
       return jsxTransform(file);
     }
     return origRfs(source, encoding);
-  }
+  };
 }
 
 function setupEnzyme() {
@@ -240,12 +260,17 @@ function setupGlobals() {
   } catch (ex) {}
 }
 
-function setupTestExtensions() {
+function setupTestExtensions({ attachToDocument = false } = {}) {
   const { mount } = require('enzyme');
   let root = document.createElement('div');
-  document.documentElement.appendChild(root);
-  global.itMountsAnd = function(name, component, test) {
+  if (attachToDocument) {
+    document.documentElement.appendChild(root);
+  }
+  global.itMountsAnd = function(name, component, test, breakpoint) {
     it(name, function() {
+      if (breakpoint) {
+        debugger;
+      }
       let init = typeof component === 'function' ? component() : component;
       let comp = init.component ? init.component : init;
       const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
@@ -371,11 +396,11 @@ function __runTests(test, className) {
   return content;
 }
 
-function setupLuis(startImmediately = true) {
+function setupLuis({ startImmediately = true, attachToDocument = false } = {}) {
   setupSerialiser(testConfig);
   setupEnzyme();
   setupChai();
-  setupTestExtensions();
+  setupTestExtensions({ attachToDocument });
 }
 
 module.exports = {
