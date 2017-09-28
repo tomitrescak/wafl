@@ -164,6 +164,11 @@ function setupJsxControls() {
 }
 
 function setupEnzyme() {
+  const Enzyme = require('enzyme');
+  const Adapter = require('enzyme-adapter-react-16');
+
+  Enzyme.configure({ adapter: new Adapter() });
+
   const ShallowWrapper = require('enzyme/build/ShallowWrapper').default;
   const ReactWrapper = require('enzyme/build/ReactWrapper').default;
 
@@ -180,7 +185,7 @@ function setupEnzyme() {
         value
       }
     });
-    wrapper.node.value = value;
+    // wrapper.node.value = value;
   }
   ShallowWrapper.prototype.select = function(number) {
     select(this, number);
@@ -215,7 +220,7 @@ function setupChai() {
 
   const chai = require('chai');
   const sinonChai = require('sinon-chai');
-  const chaiEnzyme = require('chai-enzyme');
+  // const chaiEnzyme = require('chai-enzyme');
   const chaiSubset = require('chai-subset');
   const chaiAsPromised = require('chai-as-promised');
   const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
@@ -223,7 +228,7 @@ function setupChai() {
 
   chai.should();
   chai.use(sinonChai);
-  chai.use(chaiEnzyme());
+  // chai.use(chaiEnzyme());
   chai.use(chaiMatchSnapshot);
   chai.use(chaiSubset);
   chai.use(chaiAsPromised);
@@ -335,6 +340,9 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
         throw new Error('You need to pass "client: ApolloClient" alongside of "component"');
       }
       await require('apollo-mobx/testing').waitForQueries(init.client);
+
+      // update manually wrapper as Enzyme 3 makes problems
+      wrapper.update();
 
       try {
         await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
