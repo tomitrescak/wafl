@@ -1,12 +1,26 @@
 const html = require('js-beautify').html;
 const parseStoryName = require('chai-match-snapshot/config').parseStoryName;
 const testConfig = require('chai-match-snapshot').config;
+const stringify = require('json-stringify-safe');
+const raf = require('raf');
 
-function setup({ config, wallaby } = {}) {
+function setup({ config, wallaby, snapshotMode, snapshotDir } = {}) {
   config = config || testConfig;
+
+  if (snapshotDir) {
+    config.snapshotDir = snapshotDir;
+  }
 
   if (wallaby) {
     setupWallaby(config, wallaby);
+  }
+
+  if (snapshotMode) {
+    let mode = snapshotMode.toLowerCase();
+    if (mode === 'tcp' || mode === 'both') {
+      setupTcpClient();
+    }
+    config.snapshotMode = mode;
   }
 
   setupSnapshots(config);
@@ -16,6 +30,31 @@ function setup({ config, wallaby } = {}) {
   setupChai();
   setupGlobals(config);
   setupTestExtensions();
+  setupPolyFills();
+}
+
+function setupTcpClient() {
+  process.env.UPDATE_SNAPSHOTS = 1;
+
+  var net = require('net');
+  var JsonSocket = require('json-socket');
+
+  try {
+    var port = 9838; //The same port that the server is listening on
+    var host = '127.0.0.1';
+    var socket = new JsonSocket(new net.Socket()); //Decorate a standard net.Socket with JsonSocket
+    socket.connect(port, host);
+    socket.on('connect', function() {
+      socket.isReady = true;
+    });
+    global.__socket = socket;
+  } catch (ex) {
+    console.error('Problem connecting to snapshot TCP server: ' + ex.message);
+  }
+}
+
+function setupPolyFills() {
+  raf.polyfill();
 }
 
 function setupSnapshots(config) {
@@ -85,7 +124,7 @@ function setupWallaby(config, wallaby) {
         });
 
         impl();
-      })
+      });
     };
 
     context.config = function() {};
@@ -133,6 +172,8 @@ function setupWallaby(config, wallaby) {
 
 function setupSerialiser(config) {
   let originalSerializer = config.serializer;
+  let replacer = config.replacer || null;
+
   config.serializer = obj => {
     if (obj.html) {
       let objectHtml = obj.html();
@@ -144,7 +185,7 @@ function setupSerialiser(config) {
         return '<div>ERROR: Component does not generate any HTML code!</div>';
       }
     } else {
-      return originalSerializer(obj);
+      return stringify(obj, replacer, 2);
     }
   };
 }
@@ -278,7 +319,13 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
       }
       let init = typeof component === 'function' ? component() : component;
       let comp = init.component ? init.component : init;
+      let afterMount = init.afterMount;
+
       const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+      let afterMountResult = {};
+      if (afterMount) {
+        afterMountResult = afterMount(wrapper) || {};
+      }
       wrapper.dispose = () => {
         try {
           wrapper.detach();
@@ -287,7 +334,7 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
 
       let isAsync = false;
       try {
-        const res = test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
+        const res = test(init.component || init.component ? Object.assign(init, { wrapper }, afterMountResult) : wrapper);
         isAsync = res instanceof Promise;
         if (isAsync) {
           return new Promise((resolve, reject) => {
