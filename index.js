@@ -31,6 +31,20 @@ function setup({ config, wallaby, snapshotMode, snapshotDir } = {}) {
   setupGlobals(config);
   setupTestExtensions();
   setupPolyFills();
+  setupStubs();
+  setupStyles();
+}
+
+function setupStubs() {
+  const { registerNode, setGlobalStubs } = require('proxyrequire');
+  const React = require('react');
+
+  registerNode();
+  setGlobalStubs({
+    'react-router-dom': {
+      Link: (props) => React.createElement('a', { href: props.to, className: props.className, onClick: (e) => e.preventDefault() }, props.children)
+    }
+  });
 }
 
 function setupTcpClient() {
@@ -63,8 +77,17 @@ function setupSnapshots(config) {
   // console.log(config.snapshotDir);
 }
 
+function setupStyles() {
+  const typestyle = require('typestyle');
+  if (typestyle) {
+    typestyle.reinit();
+  }
+}
+
 function setupJsDom() {
-  require('jsdom-global')();
+  if (!global.document) {
+    require('jsdom-global')();
+  }
 
   window.localStorage = {};
 
@@ -129,9 +152,13 @@ function setupWallaby(config, wallaby) {
 
     context.config = function() {};
 
+    let currentProps;
+
     context.storyOf = function(title, props, fn) {
       const names = parseStoryName(title);
       const tags = ' @story' + (props.tags ? ' ' + props.tags : '');
+
+      context.currentProps = props;
       context.describe(names.fileName + tags, () => fn(props));
     };
     context.it = function(name, impl) {
@@ -155,7 +182,9 @@ function setupWallaby(config, wallaby) {
 
           config.currentTask = {
             className: topParent,
-            title: name
+            title: name,
+            cssClassName: context.currentProps && context.currentProps.cssClassName,
+            decorator: context.currentProps && context.currentProps.decorator
           };
           // config.snapshotCalls = null;
           // console.log('!!!!!!!!!!!!!!!!');
@@ -216,8 +245,14 @@ function setupEnzyme() {
   ShallowWrapper.prototype.change = function(value) {
     change(this, value);
   };
+  ShallowWrapper.prototype.click = function() {
+    this.simulate('click');
+  };
   ReactWrapper.prototype.change = function(value) {
     change(this, value);
+  };
+  ReactWrapper.prototype.click = function() {
+    this.simulate('click');
   };
 
   function change(wrapper, value) {
@@ -312,16 +347,13 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
   if (attachToDocument) {
     document.documentElement.appendChild(root);
   }
-  global.itMountsAnd = function(name, component, test, breakpoint) {
+  global.itMountsAnd = function(name, component, test, options = {}) {
     it(name, function() {
-      if (breakpoint) {
-        debugger;
-      }
       let init = typeof component === 'function' ? component() : component;
       let comp = init.component ? init.component : init;
       let afterMount = init.afterMount;
 
-      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: options.documentRoot || root });
       let afterMountResult = {};
       if (afterMount) {
         afterMountResult = afterMount(wrapper) || {};
@@ -456,6 +488,7 @@ function setupLuis({ startImmediately = true, attachToDocument = false } = {}) {
   setupEnzyme();
   setupChai();
   setupTestExtensions({ attachToDocument });
+  setupStubs();
 }
 
 module.exports = {
