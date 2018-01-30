@@ -36,15 +36,22 @@ function setup({ config, wallaby, snapshotMode, snapshotDir } = {}) {
 }
 
 function setupStubs() {
-  const { registerNode, setGlobalStubs } = require('proxyrequire');
-  const React = require('react');
+  try {
+    const { registerNode, setGlobalStubs } = require('proxyrequire');
+    const React = require('react');
 
-  registerNode();
-  setGlobalStubs({
-    'react-router-dom': {
-      Link: (props) => React.createElement('a', { href: props.to, className: props.className, onClick: (e) => e.preventDefault() }, props.children)
-    }
-  });
+    registerNode();
+    setGlobalStubs({
+      'react-router-dom': {
+        Link: props =>
+          React.createElement(
+            'a',
+            { href: props.to, className: props.className, onClick: e => e.preventDefault() },
+            props.children
+          )
+      }
+    });
+  } catch { }
 }
 
 function setupTcpClient() {
@@ -71,10 +78,40 @@ function setupPolyFills() {
   raf.polyfill();
 }
 
+function replacer(key, value) {
+  if (typeof value === 'string' && value.match(/\d\d:\d\d:\d\d/)) {
+    return new Date(value).toDateString();
+  }
+  if (key === 'fields') {
+    return 'fields';
+  }
+  if (key === 'context') {
+    return 'App.Context';
+  }
+  if (key === 'client') {
+    return 'GraphQlClient';
+  }
+  return value;
+}
+
 function setupSnapshots(config) {
   config.snapshotDir = config.snapshotDir || 'src/tests/snapshots';
-  config.snapshotExtension = 'json';
+  config.snapshotExtension = 'js';
   // console.log(config.snapshotDir);
+
+  testConfig.onProcessSnapshots = (_taskName, snapshotName, actual, expected) => {
+    if (actual) {
+      actual = actual.replace(/ style="pointer-events: all;"/g, '');
+    }
+    if (expected) {
+      expected = expected.replace(/ style="pointer-events: all;"/g, '');
+    }
+    return {
+      actual,
+      expected
+    };
+  };
+  testConfig.replacer = replacer;
 }
 
 function setupStyles() {
@@ -156,7 +193,7 @@ function setupWallaby(config, wallaby) {
 
     context.storyOf = function(title, props, fn) {
       const names = parseStoryName(title);
-      const tags = ' @story' + (props.tags ? ' ' + props.tags : '');
+      const tags = props.tags ? ' ' + props.tags : '';
 
       context.currentProps = props;
       context.describe(names.fileName + tags, () => fn(props));
@@ -234,80 +271,86 @@ function setupJsxControls() {
 }
 
 function setupEnzyme() {
-  const Enzyme = require('enzyme');
-  const Adapter = require('enzyme-adapter-react-16');
+  try {
+    const Enzyme = require('enzyme');
+    const Adapter = require('enzyme-adapter-react-16');
 
-  Enzyme.configure({ adapter: new Adapter() });
+    Enzyme.configure({ adapter: new Adapter() });
 
-  const ShallowWrapper = require('enzyme/build/ShallowWrapper').default;
-  const ReactWrapper = require('enzyme/build/ReactWrapper').default;
+    const ShallowWrapper = require('enzyme/build/ShallowWrapper').default;
+    const ReactWrapper = require('enzyme/build/ReactWrapper').default;
 
-  ShallowWrapper.prototype.change = function(value) {
-    change(this, value);
-  };
-  ShallowWrapper.prototype.click = function() {
-    this.simulate('click');
-  };
-  ReactWrapper.prototype.change = function(value) {
-    change(this, value);
-  };
-  ReactWrapper.prototype.click = function() {
-    this.simulate('click');
-  };
+    ShallowWrapper.prototype.change = function(value) {
+      change(this, value);
+    };
+    ShallowWrapper.prototype.click = function() {
+      this.simulate('click');
+    };
+    ReactWrapper.prototype.change = function(value) {
+      change(this, value);
+    };
+    ReactWrapper.prototype.click = function() {
+      this.simulate('click');
+    };
 
-  function change(wrapper, value) {
-    wrapper.simulate('change', {
-      target: {
-        value
-      }
-    });
-    // wrapper.node.value = value;
-  }
-  ShallowWrapper.prototype.select = function(number) {
-    select(this, number);
-  };
-  ReactWrapper.prototype.select = function(number) {
-    select(this, number);
-  };
-
-  function select(wrapper, value) {
-    const Dropdown = require('semantic-ui-react').Dropdown;
-    if (wrapper.find(Dropdown.Item).length > 0) {
-      let items = wrapper.simulate('click').find(Dropdown.Item);
-      if (value > items.length - 1) {
-        throw new Error(
-          `You are selecting index #${value} in your Dropdown, while only ${items.length} Dropdown.Items are available`
-        );
-      }
-      items.at(value).simulate('click');
-    } else {
-      wrapper
-        .parent()
-        .find('Dropdown')
-        .find(Dropdown.Item)
-        .at(value)
-        .simulate('click');
+    function change(wrapper, value) {
+      wrapper.simulate('change', {
+        target: {
+          value
+        }
+      });
+      // wrapper.node.value = value;
     }
-  }
+    ShallowWrapper.prototype.select = function(number) {
+      select(this, number);
+    };
+    ReactWrapper.prototype.select = function(number) {
+      select(this, number);
+    };
+
+    function select(wrapper, value) {
+      const Dropdown = require('semantic-ui-react').Dropdown;
+      if (wrapper.find(Dropdown.Item).length > 0) {
+        let items = wrapper.simulate('click').find(Dropdown.Item);
+        if (value > items.length - 1) {
+          throw new Error(
+            `You are selecting index #${value} in your Dropdown, while only ${
+              items.length
+            } Dropdown.Items are available`
+          );
+        }
+        items.at(value).simulate('click');
+      } else {
+        wrapper
+          .parent()
+          .find('Dropdown')
+          .find(Dropdown.Item)
+          .at(value)
+          .simulate('click');
+      }
+    }
+  } catch {}
 }
 
 function setupChai() {
   // setup chai
 
-  const chai = require('chai');
-  const sinonChai = require('sinon-chai');
-  // const chaiEnzyme = require('chai-enzyme');
-  const chaiSubset = require('chai-subset');
-  const chaiAsPromised = require('chai-as-promised');
-  const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
-  // const should = global.FuseBox ? FuseBox.import('fuse-test-runner').should : require('fuse-test-runner').should;
+  try {
+    const chai = require('chai');
+    const sinonChai = require('sinon-chai');
+    // const chaiEnzyme = require('chai-enzyme');
+    const chaiSubset = require('chai-subset');
+    const chaiAsPromised = require('chai-as-promised');
+    const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
+    // const should = global.FuseBox ? FuseBox.import('fuse-test-runner').should : require('fuse-test-runner').should;
 
-  chai.should();
-  chai.use(sinonChai);
-  // chai.use(chaiEnzyme());
-  chai.use(chaiMatchSnapshot);
-  chai.use(chaiSubset);
-  chai.use(chaiAsPromised);
+    chai.should();
+    chai.use(sinonChai);
+    // chai.use(chaiEnzyme());
+    chai.use(chaiMatchSnapshot);
+    chai.use(chaiSubset);
+    chai.use(chaiAsPromised);
+  } catch {}
 }
 
 function setupGlobals() {
@@ -343,17 +386,20 @@ function setupGlobals() {
 
 function setupTestExtensions({ attachToDocument = false } = {}) {
   const { mount } = require('enzyme');
-  let root = document.createElement('div');
-  if (attachToDocument) {
-    document.documentElement.appendChild(root);
-  }
-  global.itMountsAnd = function(name, component, test, options = {}) {
+
+  global.itMountsAnd = function(name, component, test) {
     it(name, function() {
+      let root = document.createElement('div');
+
       let init = typeof component === 'function' ? component() : component;
       let comp = init.component ? init.component : init;
       let afterMount = init.afterMount;
 
-      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: options.documentRoot || root });
+      if (init.documentRoot) {
+        document.documentElement.appendChild(root);
+      }
+
+      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
       let afterMountResult = {};
       if (afterMount) {
         afterMountResult = afterMount(wrapper) || {};
@@ -366,7 +412,11 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
 
       let isAsync = false;
       try {
-        const res = test(init.component || init.component ? Object.assign(init, { wrapper }, afterMountResult) : wrapper);
+        const res = test(
+          init.component || init.component
+            ? Object.assign(init, { wrapper }, afterMountResult)
+            : wrapper
+        );
         isAsync = res instanceof Promise;
         if (isAsync) {
           return new Promise((resolve, reject) => {
@@ -385,6 +435,9 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
       } catch (ex) {
         throw ex;
       } finally {
+        if (init.documentRoot) {
+          document.documentElement.removeChild(root);
+        }
         if (!isAsync) {
           wrapper.dispose();
         }
@@ -392,27 +445,37 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
     });
   };
 
-  global.itMountsAsyncAnd = function(name, component, test) {
-    it(name, async function() {
-      let init = typeof component === 'function' ? component() : component;
-      let comp = init.component ? init.component : init;
-      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
-      try {
-        await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
-      } catch (ex) {
-        throw ex;
-      } finally {
-        try {
-          wrapper.detach();
-        } catch (ex) {}
-      }
-    });
-  };
+  // global.itMountsAsyncAnd = function(name, component, test) {
+  //   it(name, async function() {
+  //     let root = document.createElement('div');
+  //     let init = typeof component === 'function' ? component() : component;
+  //     let comp = init.component ? init.component : init;
+  //     const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+  //     try {
+  //       await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
+  //     } catch (ex) {
+  //       throw ex;
+  //     } finally {
+  //       if (init.documentRoot) {
+  //         document.documentElement.removeChild(root);
+  //       }
+  //       try {
+  //         wrapper.detach();
+  //       } catch (ex) {}
+  //     }
+  //   });
+  // };
 
   global.itMountsContainerAnd = function(name, component, test) {
     it(name, async function() {
+      let root = document.createElement('div');
       let init = typeof component === 'function' ? component() : component;
       let comp = init.component ? init.component : init;
+
+      if (init.documentRoot) {
+        document.documentElement.appendChild(root);
+      }
+
       const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
 
       if (!init.client) {
@@ -428,6 +491,9 @@ function setupTestExtensions({ attachToDocument = false } = {}) {
       } catch (ex) {
         throw ex;
       } finally {
+        if (init.documentRoot) {
+          document.documentElement.removeChild(root);
+        }
         try {
           wrapper.detach();
         } catch (ex) {}
@@ -483,12 +549,19 @@ function __runTests(test, className) {
   return content;
 }
 
-function setupLuis({ startImmediately = true, attachToDocument = false } = {}) {
+function setupLuis({ startImmediately = true, attachToDocument = false, useChai = true, useEnzyme = true, useReactRouter = true } = {}) {
   setupSerialiser(testConfig);
-  setupEnzyme();
-  setupChai();
-  setupTestExtensions({ attachToDocument });
-  setupStubs();
+
+  if (useEnzyme) {
+    setupEnzyme();
+    setupTestExtensions({ attachToDocument });
+  }
+  if (useChai) {
+    setupChai();
+  }
+  if (useReactRouter) {
+    setupStubs();
+  }
 }
 
 module.exports = {
