@@ -15,9 +15,6 @@
   ],
   "author": "Tomi Trescak",
   "license": "MIT",
-  "dependencies": {
-
-  },
   "devDependencies": {
     "@types/chai": "^4.1.2",
     "@types/chai-as-promised": "^7.1.0",
