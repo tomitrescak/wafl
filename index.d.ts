@@ -91,3 +91,46 @@ declare global {
   }
 }
 
+export function story(props: StoryConfig): void;
+
+export function mount<P, S, W>(
+  component: AdvancedFunctionInitialiser<P, W>,
+  test: (data: Wrapper<P, S, W>) => void
+): void;
+
+export function mountContainer<P, S, W>(
+  component: AdvancedFunctionInitialiser<P, W>,
+  test: (data: Wrapper<P, S, W>) => void
+): void;
+
+export function itMountsAnd<P, S, W>(
+  name: string,
+  component: AdvancedFunctionInitialiser<P, W>,
+  test: (data: Wrapper<P, S, W>) => void
+): void;
+
+export function itMountsAnd<P>(
+  name: string,
+  component: FunctionInitialiser<P>,
+  test: (wrapper: ReactWrapper<P, any>) => void
+): void;
+
+export function itMountsAnd<P>(
+  name: string,
+  component: P,
+  test: (wrapper: Wrapper<P, {}, {}>) => void
+): void;
+
+export function itMountsContainerAnd<P, S>(
+  name: string,
+  component: FunctionInitialiser<P>,
+  test: (wrapper: ReactWrapper<P, S>) => void
+): void;
+export function itMountsContainerAnd<P, S, W>(
+  name: string,
+  component: AdvancedFunctionInitialiser<P, W>,
+  test: (data: Wrapper<P, S, W>) => void
+): void;
+
+export const it = itMountsAnd;
+

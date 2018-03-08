@@ -1,14 +1,10 @@
-const html = require('js-beautify').html;
-const parseStoryName = require('chai-match-snapshot/config').parseStoryName;
-const testConfig = require('chai-match-snapshot').config;
-const stringify = require('json-stringify-safe');
-const raf = require('raf');
-
-function setup({ config, wallaby, snapshotMode, snapshotDir } = {}) {
-  config = config || testConfig;
-
-  if (snapshotDir) {
-    config.snapshotDir = snapshotDir;
+function setup({ config, wallaby, snapshotMode } = {}) {
+  if (!config) {
+    try {
+      config = require('chai-match-snapshot').config;
+    } catch (ex) {
+      config = {};
+    }
   }
 
   if (wallaby) {
@@ -28,7 +24,7 @@ function setup({ config, wallaby, snapshotMode, snapshotDir } = {}) {
   setupJsDom();
   setupEnzyme();
   setupChai();
-  setupGlobals(config);
+  setupGlobals();
   setupTestExtensions();
   setupPolyFills();
   setupStubs();
@@ -51,7 +47,7 @@ function setupStubs() {
           )
       }
     });
-  } catch { }
+  } catch (ex) {}
 }
 
 function setupTcpClient() {
@@ -75,6 +71,7 @@ function setupTcpClient() {
 }
 
 function setupPolyFills() {
+  const raf = require('raf');
   raf.polyfill();
 }
 
@@ -95,11 +92,7 @@ function replacer(key, value) {
 }
 
 function setupSnapshots(config) {
-  config.snapshotDir = config.snapshotDir || 'src/tests/snapshots';
-  config.snapshotExtension = 'js';
-  // console.log(config.snapshotDir);
-
-  testConfig.onProcessSnapshots = (_taskName, snapshotName, actual, expected) => {
+  config.onProcessSnapshots = (_taskName, snapshotName, actual, expected) => {
     if (actual) {
       actual = actual.replace(/ style="pointer-events: all;"/g, '');
     }
@@ -111,7 +104,7 @@ function setupSnapshots(config) {
       expected
     };
   };
-  testConfig.replacer = replacer;
+  config.replacer = replacer;
 }
 
 function setupStyles() {
@@ -127,43 +120,10 @@ function setupJsDom() {
   }
 
   window.localStorage = {};
-
-  // const jsdom = require('jsdom').jsdom;
-
-  // global.document = jsdom('');
-  // global.window = document.defaultView;
-  // global.navigator = {
-  //   userAgent: 'node.js'
-  // };
-
-  // function copyProps(src, target) {
-  //   const props = Object.getOwnPropertyNames(src)
-  //     .filter(prop => typeof target[prop] === 'undefined')
-  //     .map(prop => Object.getOwnPropertyDescriptor(src, prop));
-  //   Object.defineProperties(target, props);
-  // }
-  // copyProps(document.defaultView, global);
-
-  // const { JSDOM } = require('jsdom');
-  // const jsdom = new JSDOM('<!doctype html><html><body></body></html>');
-  // const { window } = jsdom;
-
-  // function copyProps(src, target) {
-  //   const props = Object.getOwnPropertyNames(src)
-  //     .filter(prop => typeof target[prop] === 'undefined')
-  //     .map(prop => Object.getOwnPropertyDescriptor(src, prop));
-  //   Object.defineProperties(target, props);
-  // }
-
-  // global.window = window;
-  // global.document = window.document;
-  // global.navigator = {
-  //   userAgent: 'node.js'
-  // };
-  // copyProps(window, global);
 }
 
 function setupWallaby(config, wallaby) {
+  // const parseStoryName = require('chai-match-snapshot/config').parseStoryName;
   var mocha = wallaby.testFramework;
 
   mocha.suite.on('pre-require', function(context) {
@@ -192,11 +152,11 @@ function setupWallaby(config, wallaby) {
     let currentProps;
 
     context.storyOf = function(title, props, fn) {
-      const names = parseStoryName(title);
+      // const names = parseStoryName(title);
       const tags = props.tags ? ' ' + props.tags : '';
 
       context.currentProps = props;
-      context.describe(names.fileName + tags, () => fn(props));
+      context.describe(title + tags, () => fn(props));
     };
     context.it = function(name, impl) {
       return origIt.call(this, name, function() {
@@ -223,9 +183,6 @@ function setupWallaby(config, wallaby) {
             cssClassName: context.currentProps && context.currentProps.cssClassName,
             decorator: context.currentProps && context.currentProps.decorator
           };
-          // config.snapshotCalls = null;
-          // console.log('!!!!!!!!!!!!!!!!');
-          // console.log(TestConfig.currentTask);
           return impl();
         } catch (ex) {
           throw ex;
@@ -237,7 +194,9 @@ function setupWallaby(config, wallaby) {
 }
 
 function setupSerialiser(config) {
-  let originalSerializer = config.serializer;
+  const html = require('js-beautify').html;
+  const stringify = require('json-stringify-safe');
+
   let replacer = config.replacer || null;
 
   config.serializer = obj => {
@@ -329,7 +288,7 @@ function setupEnzyme() {
           .simulate('click');
       }
     }
-  } catch {}
+  } catch (ex) {}
 }
 
 function setupChai() {
@@ -342,7 +301,7 @@ function setupChai() {
     const chaiSubset = require('chai-subset');
     const chaiAsPromised = require('chai-as-promised');
     const chaiMatchSnapshot = require('chai-match-snapshot').chaiMatchSnapshot;
-    // const should = global.FuseBox ? FuseBox.import('fuse-test-runner').should : require('fuse-test-runner').should;
+    // require("mocha-snapshots");
 
     chai.should();
     chai.use(sinonChai);
@@ -350,7 +309,7 @@ function setupChai() {
     chai.use(chaiMatchSnapshot);
     chai.use(chaiSubset);
     chai.use(chaiAsPromised);
-  } catch {}
+  } catch (ex) {}
 }
 
 function setupGlobals() {
@@ -384,173 +343,139 @@ function setupGlobals() {
   } catch (ex) {}
 }
 
+function mountView(component, test) {
+  const { mount } = require('enzyme');
+
+  let root = document.createElement('div');
+
+  let init = null;
+  if (typeof component === 'function') {
+    init = component();
+  } else if (component[config.createComponent]) {
+    init = component[config.createComponent](component);
+  } else {
+    init = component;
+  }
+
+  let comp = init.component ? init.component : init;
+  let afterMount = init.afterMount;
+
+  if (init.documentRoot) {
+    document.documentElement.appendChild(root);
+  }
+
+  const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+  let afterMountResult = {};
+  if (afterMount) {
+    afterMountResult = afterMount(wrapper) || {};
+  }
+  wrapper.dispose = () => {
+    try {
+      wrapper.detach();
+    } catch (ex) {}
+  };
+
+  let isAsync = false;
+  try {
+    const res = test(
+      init.component || init.component
+        ? Object.assign(init, { wrapper }, afterMountResult)
+        : wrapper
+    );
+    isAsync = res instanceof Promise;
+    if (isAsync) {
+      return new Promise((resolve, reject) => {
+        res
+          .then(() => {
+            wrapper.dispose();
+            resolve();
+          })
+          .catch(error => {
+            wrapper.dispose();
+            reject(error);
+          });
+      });
+    }
+    return res;
+  } catch (ex) {
+    throw ex;
+  } finally {
+    if (init.documentRoot) {
+      document.documentElement.removeChild(root);
+    }
+    if (!isAsync) {
+      wrapper.dispose();
+    }
+  }
+}
+
+async function mountContainer(component, test) {
+  const { mount } = require('enzyme');
+
+  let root = document.createElement('div');
+  let init = typeof component === 'function' ? component() : component;
+  let comp = init.component ? init.component : init;
+
+  if (init.documentRoot) {
+    document.documentElement.appendChild(root);
+  }
+
+  const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
+
+  if (!init.client) {
+    throw new Error('You need to pass "client: ApolloClient" alongside of "component"');
+  }
+  await require('apollo-mobx/testing').waitForQueries(init.client);
+
+  // update manually wrapper as Enzyme 3 makes problems
+  wrapper.update();
+
+  try {
+    await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
+  } catch (ex) {
+    throw ex;
+  } finally {
+    if (init.documentRoot) {
+      document.documentElement.removeChild(root);
+    }
+    try {
+      wrapper.detach();
+    } catch (ex) {}
+  }
+}
+
+function story() {
+}
+
+function itMountsAnd (name, component, test) {
+  it(name, function() {
+    return mountView(component, test);
+  });
+};
+
+function itMountsContainerAnd (name, component, test) {
+  it(name, function() {
+    return mountContainer(component, test);
+  });
+};
+
 function setupTestExtensions({ attachToDocument = false } = {}) {
   const { mount } = require('enzyme');
 
-  global.itMountsAnd = function(name, component, test) {
-    it(name, function() {
-      let root = document.createElement('div');
-
-      let init = typeof component === 'function' ? component() : component;
-      let comp = init.component ? init.component : init;
-      let afterMount = init.afterMount;
-
-      if (init.documentRoot) {
-        document.documentElement.appendChild(root);
-      }
-
-      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
-      let afterMountResult = {};
-      if (afterMount) {
-        afterMountResult = afterMount(wrapper) || {};
-      }
-      wrapper.dispose = () => {
-        try {
-          wrapper.detach();
-        } catch (ex) {}
-      };
-
-      let isAsync = false;
-      try {
-        const res = test(
-          init.component || init.component
-            ? Object.assign(init, { wrapper }, afterMountResult)
-            : wrapper
-        );
-        isAsync = res instanceof Promise;
-        if (isAsync) {
-          return new Promise((resolve, reject) => {
-            res
-              .then(() => {
-                wrapper.dispose();
-                resolve();
-              })
-              .catch(error => {
-                wrapper.dispose();
-                reject(error);
-              });
-          });
-        }
-        return res;
-      } catch (ex) {
-        throw ex;
-      } finally {
-        if (init.documentRoot) {
-          document.documentElement.removeChild(root);
-        }
-        if (!isAsync) {
-          wrapper.dispose();
-        }
-      }
-    });
-  };
-
-  // global.itMountsAsyncAnd = function(name, component, test) {
-  //   it(name, async function() {
-  //     let root = document.createElement('div');
-  //     let init = typeof component === 'function' ? component() : component;
-  //     let comp = init.component ? init.component : init;
-  //     const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
-  //     try {
-  //       await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
-  //     } catch (ex) {
-  //       throw ex;
-  //     } finally {
-  //       if (init.documentRoot) {
-  //         document.documentElement.removeChild(root);
-  //       }
-  //       try {
-  //         wrapper.detach();
-  //       } catch (ex) {}
-  //     }
-  //   });
-  // };
-
-  global.itMountsContainerAnd = function(name, component, test) {
-    it(name, async function() {
-      let root = document.createElement('div');
-      let init = typeof component === 'function' ? component() : component;
-      let comp = init.component ? init.component : init;
-
-      if (init.documentRoot) {
-        document.documentElement.appendChild(root);
-      }
-
-      const wrapper = init.wrapper ? init.wrapper : mount(comp, { attachTo: root });
-
-      if (!init.client) {
-        throw new Error('You need to pass "client: ApolloClient" alongside of "component"');
-      }
-      await require('apollo-mobx/testing').waitForQueries(init.client);
-
-      // update manually wrapper as Enzyme 3 makes problems
-      wrapper.update();
-
-      try {
-        await test(init.component || init.component ? Object.assign(init, { wrapper }) : wrapper);
-      } catch (ex) {
-        throw ex;
-      } finally {
-        if (init.documentRoot) {
-          document.documentElement.removeChild(root);
-        }
-        try {
-          wrapper.detach();
-        } catch (ex) {}
-      }
-    });
-  };
+  global.itMountsAnd = itMountsAnd;
+  global.itMountsContainerAnd = itMountsContainerAnd;
+  global.mount = mountView;
+  global.mountContainer = mountContainer;
 }
 
-function transform(content, name) {
-  var classReg = /export\s+class\s+(\w+Test)/g;
-  name = name || '.';
-
-  var matches = classReg.exec(content);
-
-  if (matches) {
-    content += `
-const TestConfig = require('fuse-test-runner').TestConfig;
-function getAllFuncs(obj) {
-    let props = [];
-    do {
-        props = props.concat(Object.getOwnPropertyNames(obj).filter(
-            w => typeof obj[w] === 'function' && w !== 'constructor' && props.indexOf(w) === -1));
-        obj = Object.getPrototypeOf(obj);
-    } while (obj.constructor.name !== 'Object');
-    return props;
-}
-
-function __runTests(test, className) {
-  for (let method of getAllFuncs(test)) {
-    if (typeof test[method] === 'function' && method.match(/${name}/)) {
-      if (method === 'beforeEach' || method === 'afterEach') {
-        test[method]();
-      } else {
-        it(method.trim(), async function () {
-          TestConfig.currentTask = {
-            className,
-            title: method
-          }
-          TestConfig.snapshotCalls = null;
-          await test[method]();
-        });
-      }
-    }
-  }
-} 
-`;
-    while (matches) {
-      content += `__runTests(new ${matches[1]}(), '${matches[1]}');\n`;
-      matches = classReg.exec(content);
-    }
-  }
-
-  return content;
-}
-
-function setupLuis({ startImmediately = true, attachToDocument = false, useChai = true, useEnzyme = true, useReactRouter = true } = {}) {
-  setupSerialiser(testConfig);
+function setupLuis({
+  startImmediately = true,
+  attachToDocument = false,
+  useChai = true,
+  useEnzyme = true,
+  useReactRouter = true
+} = {}) {
+  setupSerialiser(require('chai-match-snapshot').config);
 
   if (useEnzyme) {
     setupEnzyme();
@@ -564,10 +489,20 @@ function setupLuis({ startImmediately = true, attachToDocument = false, useChai 
   }
 }
 
+const config = {
+  createComponent: 'mount'
+}
+
 module.exports = {
+  config,
   setup,
   setupGlobals,
   setupLuis,
-  transform,
-  setupJsxControls
+  setupJsxControls,
+  mountContainer,
+  mount: mountView,
+  itMountsAnd,
+  itMountsContainerAnd,
+  story,
+  it: itMountsAnd
 };

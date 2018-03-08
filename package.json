@@ -1,6 +1,6 @@
 {
   "name": "wafl",
-  "version": "0.4.4",
+  "version": "0.4.16",
   "description": "Wallaby-Fuse-Luis Test Helpers",
   "main": "index.js",
   "scripts": {
