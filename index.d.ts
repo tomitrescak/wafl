@@ -6,13 +6,8 @@ type LuisProps = {
   attachToDocument?: boolean;
 }
 
-export declare function setup(): void;
 export declare function setupLuis(options?: LuisProps): void;
-export declare function setupEnzyme(): void;
-export declare function setupGlobals(): void;
-export declare function setupBddBridge(): void;
-export declare function setupJsxControls(): void;
-
+export declare function setupTestExtensions();
 
 import { ReactElement } from "react";
 import { ReactWrapper } from 'enzyme';
@@ -26,6 +21,14 @@ import { ReactWrapper } from 'enzyme';
 //     click(): void;
 //   }
 // }
+
+declare module 'enzyme' {
+  interface ReactWrapper {
+    change(value: string): void;
+    select(value: number): void;
+    click(): void;
+  }
+}
 
 declare global {
   // declare function xit(name: string, implementation: () => void): void;
@@ -63,6 +66,7 @@ declare global {
     component: AdvancedFunctionInitialiser<P, W>,
     test: (data: Wrapper<P, S, W>) => void
   ): void;
+
   declare function itMountsAnd<P>(
     name: string,
     component: FunctionInitialiser<P>,
@@ -74,16 +78,16 @@ declare global {
     component: FunctionInitialiser<P>,
     test: (wrapper: ReactWrapper<P, S>) => void
   ): void;
+
   declare function itMountsContainerAnd<P, S, W>(
     name: string,
     component: AdvancedFunctionInitialiser<P, W>,
     test: (data: Wrapper<P, S, W>) => void
   ): void;
-
+  
   declare type MatchOptions = {
     serializer?: (source: string) => string;
   };
-
   declare namespace Chai {
     interface Assertion {
       matchSnapshot(name?: string, options?: MatchOptions): Assertion
@@ -126,6 +130,7 @@ export function itMountsContainerAnd<P, S>(
   component: FunctionInitialiser<P>,
   test: (wrapper: ReactWrapper<P, S>) => void
 ): void;
+
 export function itMountsContainerAnd<P, S, W>(
   name: string,
   component: AdvancedFunctionInitialiser<P, W>,
